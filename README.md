@@ -13,6 +13,7 @@ Enter how many grams of kernels you're popping, put your phone next to the pot o
   - an S-curve fitted to the pops so far says about 97% of the batch has popped. This doesn't depend on knowing the kernel count or catching every pop.
 
   "After the peak" is judged from the S-curve fit over all pops, not from a few seconds of rate data. That way a random cluster among the first sparse pops, or a few false detections, can't set off the alarm early.
+- a **talking filter**, so people chatting in the kitchen don't get counted as pops
 - a history of previous batches, stored only in your browser
 
 There's also a **demo** with simulated popcorn, so you can try it without a stove.
@@ -26,9 +27,22 @@ Everything runs locally in the browser. Audio is never recorded or uploaded.
 1. A 4th-order 1.5 kHz high-pass filter removes hum and rumble from the stove, extractor fan and microwave.
 2. Energy is measured in 1.5 ms frames.
 3. The background noise level is tracked as the 20th percentile of the last 1.5 s.
-4. A pop is counted when a frame is far enough above the noise level (set by the sensitivity setting) **and** rose sharply compared with the 3–8 ms before it. A 12 ms dead time stops one pop from counting twice.
+4. A sound is a pop candidate when a frame is far enough above the noise level (set by the sensitivity setting) **and** rose sharply compared with the 3–8 ms before it. A 12 ms dead time stops one pop from counting twice.
+5. **Talking filter.** Voiced speech is a stream of tiny clicks from the vocal cords (100–250 per second), and each one looks like a small pop. A voice detector tracks pitch (YIN, 70–400 Hz) on the 200–900 Hz band, above the rumble of gas burners and extractor fans. While someone is talking, a candidate only counts if it is bright (its level above 4 kHz is at most 9 dB below its level above 1.5 kHz; voices have little energy up there) and at least 3 dB above the sound right before and after it, or else at least 12 dB above it. Because of this, pops are reported about a quarter of a second late. The filter can be turned off in the settings.
 
-On synthetic test audio with loud background noise and oil-sizzle crackles, it had no false positives and caught about 80% of pops at default sensitivity. The pops it missed were either very quiet or almost on top of another pop.
+### How well it works
+
+Tested offline with the real detector code in Chrome:
+
+- **Real popcorn:** 16 recordings of stovetop and microwave popcorn from [Freesound](https://freesound.org). With no talking, the talking filter keeps 96% of the pops counted without it.
+- **Talking** (real recordings and synthetic voices in English and German), 20 dB above a quiet background: false pops fell from 81 to 18 per minute on average.
+- **Talking over gas-burner rumble, extractor fans or kitchen noise:** false pops fell from 157–222 to 21–23 per minute.
+- **Real popcorn with non-stop loud talking:** false counts fell from 20% to 11% of the real pops, and about 7% of real pops were lost.
+- **Synthetic popcorn:** about 90% of pops caught, with no false positives.
+
+In an end-to-end test, someone talked for 12 seconds before the popcorn started. Without the filter, those false pops looked like a finished batch and set off the stop alarm after 21 seconds. With the filter, the alarm came near the true end of popping.
+
+**Not filtered:** short, sharp kitchen sounds like cutlery, dishes, chopping, running water or sizzling in another pan. They are physically very similar to pops, and often even sharper and brighter. In tests no sound feature could separate them from real pops without also losing many pops. Keep such noise away from the phone while it's popping.
 
 ## Numbers used
 

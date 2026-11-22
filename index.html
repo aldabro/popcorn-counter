@@ -99,6 +99,7 @@
 
         <div class="card counter-card">
           <p class="demo-tag" id="demo-tag" hidden>Demo · simulated batch of 25 g butterfly kernels</p>
+          <p class="voice-chip" id="voice-chip" hidden><span aria-hidden="true">🗣️</span> Hearing voices</p>
           <div class="counter">
             <div class="counter-main">
               <span id="count" class="count">0</span>
@@ -161,6 +162,7 @@
           <p class="hint" id="meter-hint">
             Grey tick: background noise. A sound must jump past the orange tick to count as a pop.
           </p>
+          <p class="hint" id="voice-hint"></p>
         </div>
 
         <div class="actions row">
@@ -206,6 +208,13 @@
             the busiest part of popping has passed.
           </p>
         </div>
+        <div class="field">
+          <label class="check"><input type="checkbox" id="voice-filter" /> Filter out talking</label>
+          <p class="hint">
+            While people talk, only clear pops are counted. Turn this off if the count stays too low while the app
+            says it hears voices.
+          </p>
+        </div>
         <label class="check"><input type="checkbox" id="sound" /> Beep when it's time to stop</label>
         <label class="check"><input type="checkbox" id="demo-sound" /> Play the demo's popcorn sound out loud</label>
       </details>
@@ -229,8 +238,9 @@
             </li>
             <li>Start listening before the first pop. It learns the background noise within a second.</li>
             <li>
-              Steady noise (extractor fan, microwave hum) is filtered out. Talking, clattering and kernels pinging
-              against a metal lid right next to the phone can be counted as pops.
+              Steady noise (extractor fan, microwave hum) is filtered out, and so is most talking. Short, sharp sounds
+              still count as pops: cutlery, dishes, chopping, running water, sizzling in another pan. Keep those away
+              from the phone while it's popping.
             </li>
             <li>
               Watch the microphone meter: pops should jump past the orange tick, background noise should stay below
@@ -248,6 +258,17 @@
           <p>
             Two pops less than about 10 ms apart count as one. In the busiest seconds of a big batch the count can
             run a bit low. That's why it doesn't only rely on the percentage.
+          </p>
+          <p>
+            Talking is tricky: every vowel is a stream of tiny clicks from the vocal cords, 100 to 250 per second. The
+            app recognises voices by their pitch. While someone talks, it only counts sounds that look like pops
+            rather than voice clicks: bright and standing out from the voice. Some pops are missed while people talk,
+            and a few voice sounds still get through. Without this filter, someone talking next to the phone can add
+            dozens to hundreds of false pops per minute.
+          </p>
+          <p>
+            Other short, sharp sounds, like cutlery, chopping or water splashing, are physically very similar to a
+            pop. Often they are even sharper. The app can't reliably tell them apart by sound alone.
           </p>
 
           <h3>When it tells you to stop</h3>

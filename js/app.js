@@ -47,6 +47,7 @@ const DEFAULTS = {
   gapSec: 2.5,
   sound: true,
   demoSound: true,
+  voiceFilter: true,
 };
 const settings = { ...DEFAULTS, ...load(SETTINGS_KEY, {}) };
 const saveSettings = () => store(SETTINGS_KEY, settings);
@@ -70,7 +71,11 @@ function estimatedKernels() {
 
 function detectorParams() {
   const th = SENS_DB[Math.min(10, Math.max(1, settings.sensitivity)) - 1];
-  return { thresholdDb: th, riseDb: Math.min(9, Math.max(5, th * 0.8)) };
+  return {
+    thresholdDb: th,
+    riseDb: Math.min(9, Math.max(5, th * 0.8)),
+    voiceFilter: settings.voiceFilter,
+  };
 }
 
 /* ───────────── Setup form ───────────── */
@@ -111,6 +116,8 @@ const el = {
   gapSec: $('gap-sec'),
   sound: $('sound'),
   demoSound: $('demo-sound'),
+  voiceFilter: $('voice-filter'),
+  voiceChip: $('voice-chip'),
   historyCard: $('history-card'),
   history: $('history'),
   clearHistory: $('clear-history'),
@@ -150,6 +157,7 @@ function initForm() {
   el.gapSec.value = String(settings.gapSec);
   el.sound.checked = settings.sound;
   el.demoSound.checked = settings.demoSound;
+  el.voiceFilter.checked = settings.voiceFilter;
   renderSensitivity();
   renderEstimate();
 
@@ -188,6 +196,12 @@ function initForm() {
     saveSettings();
     renderSensitivity();
     if (audio) audio.node.port.postMessage({ type: 'params', ...detectorParams() });
+  });
+  el.voiceFilter.addEventListener('change', () => {
+    settings.voiceFilter = el.voiceFilter.checked;
+    saveSettings();
+    if (audio) audio.node.port.postMessage({ type: 'params', ...detectorParams() });
+    renderSlow();
   });
   el.alertPct.addEventListener('change', () => {
     settings.alertPct = parseFloat(el.alertPct.value);
@@ -253,6 +267,8 @@ let finalNow = 0;
 let meter = null;
 let shownLevel = -120;
 let silentSince = null;
+let ignoredVoice = 0; // sounds the detector ignored as talking, this session
+let voiceSeenAt = -Infinity; // session time when a voice was last heard
 let countShown = -1;
 let alarm = { started: false, acked: false, timer: null };
 let wakeLock = null;
@@ -354,6 +370,8 @@ function beginSession(kernels, demo) {
   resetAlarm();
   countShown = -1;
   silentSince = null;
+  ignoredVoice = 0;
+  voiceSeenAt = -Infinity;
 
   el.setup.hidden = true;
   el.live.hidden = false;
@@ -382,8 +400,11 @@ function onWorkletMessage(e) {
     if (t < 0) return;
     session.add(t);
     popEffect();
+  } else if (m.type === 'ignored') {
+    if (state === 'running' && m.t - t0 >= 0) ignoredVoice++;
   } else if (m.type === 'meter') {
     meter = m;
+    if (m.voice) voiceSeenAt = m.t - t0;
   }
 }
 
@@ -391,6 +412,8 @@ function resetCount() {
   if (state !== 'running') return;
   session = new Session({ kernels: session.kernels, demo: session.demo });
   t0 = audio.ctx.currentTime;
+  ignoredVoice = 0;
+  voiceSeenAt = -Infinity;
   resetAlarm();
   renderSlow();
 }
@@ -643,6 +666,22 @@ function renderSlow() {
         : 'Grey tick: background noise. A sound must jump past the orange tick to count as a pop.',
     );
   }
+
+  // Voice filter feedback
+  // held for 2 s so it doesn't flicker in the short pauses between phrases
+  const talking = state === 'running' && settings.voiceFilter && t - voiceSeenAt < 2;
+  el.voiceChip.hidden = !talking;
+  const ignored = ignoredVoice
+    ? `${ignoredVoice.toLocaleString()} voice ${ignoredVoice === 1 ? 'sound' : 'sounds'} ignored so far.`
+    : 'Nothing ignored so far.';
+  setText(
+    'voice-hint',
+    !settings.voiceFilter
+      ? 'Talking filter is off: voices can be counted as pops.'
+      : talking
+        ? `🗣️ Hearing voices: only clear pops count while people talk. ${ignored}`
+        : `🗣️ Talking filter is on. ${ignored}`,
+  );
 
   const markers = session.alarmAt !== null ? [{ t: session.alarmAt, label: 'alarm' }] : [];
   chart.update(session.pops, t, markers);

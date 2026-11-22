@@ -521,6 +521,18 @@ input[type='range'] {
   border-radius: 999px;
   padding: 3px 10px;
 }
+.voice-chip {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
 .counter {
   display: flex;
   justify-content: space-between;
