@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Popcorn Counter</title>
+    <meta
+      name="description"
+      content="Counts popcorn pops with your microphone and tells you when to take it off the heat. Works in any modern browser."
+    />
+    <meta name="theme-color" content="#fbf7ef" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1b1814" media="(prefers-color-scheme: dark)" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍿</text></svg>"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="app-header">
+        <h1><span aria-hidden="true">🍿</span> Popcorn Counter</h1>
+        <p class="tagline">
+          Put your phone next to the pot or microwave. It listens, counts every pop and tells you when to stop the
+          heat, before anything burns.
+        </p>
+      </header>
+
+      <div id="notice" class="notice" role="alert" hidden></div>
+
+      <!-- ───────────── Setup ───────────── -->
+      <section id="setup" class="card" aria-labelledby="setup-title">
+        <h2 id="setup-title">Your batch</h2>
+
+        <div class="field">
+          <label for="grams">How much popcorn?</label>
+          <div class="input-unit">
+            <input id="grams" type="number" inputmode="decimal" min="0" max="5000" step="1" placeholder="e.g. 100" />
+            <span>g</span>
+          </div>
+          <div class="chips" role="group" aria-label="Quick amounts">
+            <button type="button" class="chip" data-grams="50">50 g</button>
+            <button type="button" class="chip" data-grams="75">75 g</button>
+            <button type="button" class="chip" data-grams="100">100 g</button>
+            <button type="button" class="chip" data-grams="150">150 g</button>
+          </div>
+        </div>
+
+        <fieldset class="field">
+          <legend>What are you popping?</legend>
+          <div class="segmented">
+            <label><input type="radio" name="form" value="loose" /> <span>Loose kernels</span></label>
+            <label><input type="radio" name="form" value="bag" /> <span>Microwave bag</span></label>
+          </div>
+          <p class="hint" id="form-hint"></p>
+        </fieldset>
+
+        <div class="field">
+          <label for="variety">Kernel type</label>
+          <select id="variety">
+            <option value="butterfly">Butterfly (most popcorn) · 6.5 / g</option>
+            <option value="mushroom">Mushroom (round) · 5.2 / g</option>
+            <option value="custom">Custom: I counted my own</option>
+          </select>
+          <p class="hint">Not sure? It's almost certainly butterfly.</p>
+        </div>
+
+        <div class="field" id="custom-field" hidden>
+          <label for="kpg">Kernels per gram</label>
+          <input id="kpg" type="number" inputmode="decimal" min="1" max="30" step="0.1" />
+          <p class="hint">Weigh 10 g of kernels, count them and divide by 10.</p>
+        </div>
+
+        <p class="estimate" id="estimate" aria-live="polite"></p>
+
+        <div class="actions">
+          <button id="start" type="button" class="btn primary big">
+            <span aria-hidden="true">🎤</span> Start listening
+          </button>
+          <button id="demo" type="button" class="btn secondary">Try a demo with simulated popcorn</button>
+        </div>
+        <p class="fine">
+          Start before the first pop. The sound is analysed on your device. Nothing is recorded or uploaded.
+        </p>
+      </section>
+
+      <!-- ───────────── Live ───────────── -->
+      <section id="live" hidden aria-label="Live count">
+        <p id="sr-status" class="sr-only" aria-live="polite"></p>
+        <div id="status" class="status neutral">
+          <span class="status-icon" aria-hidden="true">👂</span>
+          <div class="status-text">
+            <strong class="status-title">Listening…</strong>
+            <span class="status-detail"></span>
+          </div>
+          <button id="ack" type="button" class="btn small" hidden>Got it</button>
+        </div>
+
+        <div class="card counter-card">
+          <p class="demo-tag" id="demo-tag" hidden>Demo · simulated batch of 25 g butterfly kernels</p>
+          <div class="counter">
+            <div class="counter-main">
+              <span id="count" class="count">0</span>
+              <span class="count-label">pops</span>
+            </div>
+            <div class="counter-pct" id="pct-block">
+              <span id="pct" class="pct">0%</span>
+              <span class="count-label" id="pct-label">of ≈ 0 kernels</span>
+            </div>
+          </div>
+          <div
+            class="progress"
+            id="progress"
+            role="progressbar"
+            aria-label="Share of kernels popped"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div class="progress-fill" id="progress-fill"></div>
+            <div class="progress-marker" id="progress-marker" title="Alarm"></div>
+          </div>
+          <div class="pop-layer" id="pop-layer" aria-hidden="true"></div>
+        </div>
+
+        <div class="card">
+          <dl class="stats">
+            <div class="stat"><dt>Time</dt><dd id="s-elapsed">0:00</dd></div>
+            <div class="stat"><dt>First pop</dt><dd id="s-first">–</dd></div>
+            <div class="stat"><dt>Pops / s now</dt><dd id="s-rate">0</dd></div>
+            <div class="stat">
+              <dt>Peak pops / s</dt>
+              <dd id="s-peak">–</dd>
+              <small id="s-peak-at"></small>
+            </div>
+            <div class="stat"><dt>Since last pop</dt><dd id="s-gap">–</dd></div>
+            <div class="stat">
+              <dt>Popping curve</dt>
+              <dd id="s-curve">–</dd>
+              <small id="s-curve-sub">needs 20+ pops</small>
+            </div>
+          </dl>
+        </div>
+
+        <div class="card">
+          <h3>Pops per second</h3>
+          <div class="chart-wrap">
+            <canvas id="chart" role="img" aria-label="Column chart of pops per second over time"></canvas>
+            <div class="tooltip" id="chart-tip" hidden></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Microphone</h3>
+          <div class="meter" id="meter" aria-hidden="true">
+            <div class="meter-fill" id="meter-fill"></div>
+            <div class="meter-floor" id="meter-floor"></div>
+            <div class="meter-threshold" id="meter-threshold"></div>
+          </div>
+          <p class="hint" id="meter-hint">
+            Grey tick: background noise. A sound must jump past the orange tick to count as a pop.
+          </p>
+        </div>
+
+        <div class="actions row">
+          <button id="finish" type="button" class="btn primary">Finish</button>
+          <button id="reset" type="button" class="btn secondary">Reset count</button>
+          <button id="again" type="button" class="btn primary" hidden>New batch</button>
+        </div>
+      </section>
+
+      <!-- ───────────── Settings ───────────── -->
+      <details class="card" id="settings-card">
+        <summary><h2>Alarm &amp; detection settings</h2></summary>
+        <div class="field">
+          <label for="sensitivity">Sensitivity: <output id="sensitivity-out"></output></label>
+          <input id="sensitivity" type="range" min="1" max="10" step="1" />
+          <div class="range-labels"><span>Noisy kitchen</span><span>Quiet room / microwave</span></div>
+          <p class="hint">
+            Counting without any pops? Lower it. Missing pops? Raise it. Both work while it's listening.
+          </p>
+        </div>
+        <div class="field">
+          <label for="alert-pct">Alarm when this share of kernels has popped</label>
+          <select id="alert-pct">
+            <option value="0">Off</option>
+            <option value="70">70%</option>
+            <option value="75">75%</option>
+            <option value="80">80%</option>
+            <option value="85">85%</option>
+            <option value="90">90%</option>
+            <option value="95">95%</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="gap-sec">…or when popping slows to this gap between pops</label>
+          <select id="gap-sec">
+            <option value="2">2 seconds</option>
+            <option value="2.5">2.5 seconds</option>
+            <option value="3">3 seconds</option>
+            <option value="4">4 seconds</option>
+          </select>
+          <p class="hint">
+            Most microwave popcorn bags say to stop when there are 2–3 seconds between pops. This only applies after
+            the busiest part of popping has passed.
+          </p>
+        </div>
+        <label class="check"><input type="checkbox" id="sound" /> Beep when it's time to stop</label>
+        <label class="check"><input type="checkbox" id="demo-sound" /> Play the demo's popcorn sound out loud</label>
+      </details>
+
+      <!-- ───────────── History ───────────── -->
+      <details class="card" id="history-card" hidden>
+        <summary><h2>Previous batches</h2></summary>
+        <ol class="history" id="history"></ol>
+        <button id="clear-history" type="button" class="btn small secondary">Clear history</button>
+      </details>
+
+      <!-- ───────────── Help ───────────── -->
+      <details class="card">
+        <summary><h2>Tips &amp; how it works</h2></summary>
+        <div class="prose">
+          <h3>Getting a good count</h3>
+          <ul>
+            <li>
+              Put the phone 20–50 cm from the pot, or beside the microwave. Not on the stove or on top of the
+              microwave, because it gets hot.
+            </li>
+            <li>Start listening before the first pop. It learns the background noise within a second.</li>
+            <li>
+              Steady noise (extractor fan, microwave hum) is filtered out. Talking, clattering and kernels pinging
+              against a metal lid right next to the phone can be counted as pops.
+            </li>
+            <li>
+              Watch the microphone meter: pops should jump past the orange tick, background noise should stay below
+              it. Adjust the sensitivity if they don't.
+            </li>
+            <li>Keep this page open and in front. It keeps the screen awake where the browser allows it.</li>
+          </ul>
+
+          <h3>How it counts</h3>
+          <p>
+            A pop is a very short, sharp burst of sound, only a few milliseconds long. The app filters out
+            low-frequency rumble, keeps track of the background noise level, and counts a pop whenever the sound
+            jumps far above that level within a few milliseconds.
+          </p>
+          <p>
+            Two pops less than about 10 ms apart count as one. In the busiest seconds of a big batch the count can
+            run a bit low. That's why it doesn't only rely on the percentage.
+          </p>
+
+          <h3>When it tells you to stop</h3>
+          <p>The alarm goes off when the first of these happens:</p>
+          <ul>
+            <li><strong>Kernel share</strong>: the set percentage of your kernels has popped.</li>
+            <li>
+              <strong>Slow-down</strong>: after the peak, a gap between pops reaches your set length (2.5 s by
+              default). Small batches never pop very fast, so they need a somewhat longer gap.
+            </li>
+            <li>
+              <strong>Popping curve</strong>: popping follows an S-shaped curve over time. Once the peak has passed, the
+              app fits that curve to your pops and estimates how far through the batch you are, without needing the
+              exact kernel count.
+            </li>
+          </ul>
+
+          <h3>Where the numbers come from</h3>
+          <ul>
+            <li>
+              Supplier spec sheets list butterfly popcorn at about 50–74 kernels per 10 g (for example
+              <a href="https://www.webstaurantstore.com/carnival-king-5-lb-100-organic-butterfly-popcorn-kernels/999POPBFLORG.html" rel="noopener">63–70</a>,
+              <a href="https://knowde.com/stores/reist-popcorn-company/products/reist-popcorn-company-white-butterfly-popcorn" rel="noopener">68–74</a>),
+              and mushroom popcorn at about 42–62 (for example
+              <a href="https://www.webstaurantstore.com/weaver-50-lb-caramel-sweet-mushroom-popcorn-kernels/380POPMSHCAR.html" rel="noopener">42–58</a>).
+              The app uses 6.5 and 5.2 kernels per gram. For the best accuracy, count your own.
+            </li>
+            <li>
+              Microwave bags: the weight on the label includes oil or butter and salt. Labels show roughly 15–35% fat, so
+              the app assumes about 70% of the weight is kernels.
+            </li>
+            <li>
+              Not every kernel pops. A
+              <a href="https://www.sciencedaily.com/releases/2005/04/050415112829.htm" rel="noopener">Purdue study</a>
+              of 14 brands found 4% to 47% of kernels left unpopped, so 100% is never reached.
+            </li>
+          </ul>
+        </div>
+      </details>
+
+      <footer class="footer">
+        <a href="https://github.com/aldabro/popcorn-counter" rel="noopener">Source on GitHub</a>
+      </footer>
+    </main>
+  </body>
+</html>
